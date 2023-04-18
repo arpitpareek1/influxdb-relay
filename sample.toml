@@ -3,16 +3,17 @@
 [[http]]
 name = "example-http"
 bind-addr = "127.0.0.1:9096"
+token = "test"
 output = [
-    { name="local1", location = "http://127.0.0.1:8086/write" },
-    { name="local2", location = "http://127.0.0.1:7086/write" },
+    { name="local1", location = "http://127.0.0.1:8086/api/v2/write", token="e_RJbnYSAkFCg6PxpO08VtRCulD8WDFrQKxoXAkRTxD7bV6JwPYZ9NvL_uKese_uYLdg-Mf9vfiiQ4I2z19wuA==" },
+    { name="local2", location = "http://163.228.230.87:8086/api/v2/write", token="T_1IlN7TzIPHFWJNefYCYPcA8iNTe2ES7JdC-SHusmq47a_-rHpzgQ5gDqjB-kPJ6KzLtps_rF0o-v6I2YSyrQ==" },
 ]
 
-[[udp]]
-name = "example-udp"
-bind-addr = "127.0.0.1:9096"
-read-buffer = 0 # default
-output = [
-    { name="local1", location="127.0.0.1:8089", mtu=512 },
-    { name="local2", location="127.0.0.1:7089", mtu=1024 },
-]
+# [[udp]]
+# name = "example-udp"
+# bind-addr = "127.0.0.1:9096"
+# read-buffer = 0 # default
+# output = [
+#     { name="local1", location="127.0.0.1:8089", mtu=512 },
+#     { name="local2", location="127.0.0.1:7089", mtu=1024 },
+# ]

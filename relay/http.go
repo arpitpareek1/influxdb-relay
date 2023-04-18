@@ -24,6 +24,7 @@ type HTTP struct {
 	addr   string
 	name   string
 	schema string
+	token  string
 
 	cert string
 	rp   string
@@ -48,6 +49,7 @@ func NewHTTP(cfg HTTPConfig) (Relay, error) {
 
 	h.addr = cfg.Addr
 	h.name = cfg.Name
+	h.token = cfg.Token
 
 	h.cert = cfg.SSLCombinedPem
 	h.rp = cfg.DefaultRetentionPolicy
@@ -119,8 +121,8 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path != "/write" {
-		jsonError(w, http.StatusNotFound, "invalid write endpoint")
+	if r.URL.Path != "/api/v2/write" {
+		jsonError(w, http.StatusNotFound, "invalid write endpoint:"+r.URL.Path)
 		return
 	}
 
@@ -134,16 +136,24 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queryParams := r.URL.Query()
-
-	// fail early if we're missing the database
-	if queryParams.Get("db") == "" {
-		jsonError(w, http.StatusBadRequest, "missing parameter: db")
+	// check for authorization performed via the header
+	authHeader := r.Header.Get("Authorization")
+	authToken := strings.TrimPrefix(authHeader, "Token ")
+	if h.token != authToken {
+		jsonError(w, http.StatusUnauthorized, "invalid authorization token")
 		return
 	}
 
-	if queryParams.Get("rp") == "" && h.rp != "" {
-		queryParams.Set("rp", h.rp)
+	queryParams := r.URL.Query()
+
+	// fail early if we're missing the database
+	if queryParams.Get("bucket") == "" {
+		jsonError(w, http.StatusBadRequest, "missing parameter: bucket")
+		return
+	}
+	if queryParams.Get("org") == "" {
+		jsonError(w, http.StatusBadRequest, "missing parameter: org")
+		return
 	}
 
 	var body = r.Body
@@ -197,9 +207,6 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	outBytes := outBuf.Bytes()
 
-	// check for authorization performed via the header
-	authHeader := r.Header.Get("Authorization")
-
 	var wg sync.WaitGroup
 	wg.Add(len(h.backends))
 
@@ -209,7 +216,7 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		b := b
 		go func() {
 			defer wg.Done()
-			resp, err := b.post(outBytes, query, authHeader)
+			resp, err := b.post(outBytes, query)
 			if err != nil {
 				log.Printf("Problem posting to relay %q backend %q: %v", h.Name(), b.name, err)
 			} else {
@@ -286,15 +293,18 @@ func jsonError(w http.ResponseWriter, code int, message string) {
 }
 
 type poster interface {
-	post([]byte, string, string) (*responseData, error)
+	post([]byte, string) (*responseData, error)
+	tokenStr() string
 }
 
 type simplePoster struct {
 	client   *http.Client
 	location string
+	token    string
+	auth     string
 }
 
-func newSimplePoster(location string, timeout time.Duration, skipTLSVerification bool) *simplePoster {
+func newSimplePoster(location string, timeout time.Duration, skipTLSVerification bool, token string) *simplePoster {
 	// Configure custom transport for http.Client
 	// Used for support skip-tls-verification option
 	transport := &http.Transport{
@@ -309,10 +319,12 @@ func newSimplePoster(location string, timeout time.Duration, skipTLSVerification
 			Transport: transport,
 		},
 		location: location,
+		token:    token,
+		auth:     fmt.Sprintf("Token %s", token),
 	}
 }
 
-func (b *simplePoster) post(buf []byte, query string, auth string) (*responseData, error) {
+func (b *simplePoster) post(buf []byte, query string) (*responseData, error) {
 	req, err := http.NewRequest("POST", b.location, bytes.NewReader(buf))
 	if err != nil {
 		return nil, err
@@ -321,9 +333,8 @@ func (b *simplePoster) post(buf []byte, query string, auth string) (*responseDat
 	req.URL.RawQuery = query
 	req.Header.Set("Content-Type", "text/plain")
 	req.Header.Set("Content-Length", strconv.Itoa(len(buf)))
-	if auth != "" {
-		req.Header.Set("Authorization", auth)
-	}
+
+	req.Header.Set("Authorization", b.auth)
 
 	resp, err := b.client.Do(req)
 	if err != nil {
@@ -347,6 +358,10 @@ func (b *simplePoster) post(buf []byte, query string, auth string) (*responseDat
 	}, nil
 }
 
+func (b *simplePoster) tokenStr() string {
+	return b.token
+}
+
 type httpBackend struct {
 	poster
 	name string
@@ -366,7 +381,7 @@ func newHTTPBackend(cfg *HTTPOutputConfig) (*httpBackend, error) {
 		timeout = t
 	}
 
-	var p poster = newSimplePoster(cfg.Location, timeout, cfg.SkipTLSVerification)
+	var p poster = newSimplePoster(cfg.Location, timeout, cfg.SkipTLSVerification, cfg.Token)
 
 	// If configured, create a retryBuffer per backend.
 	// This way we serialize retries against each backend.

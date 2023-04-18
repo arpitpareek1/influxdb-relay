@@ -24,6 +24,9 @@ type HTTPConfig struct {
 	// Default retention policy to set for forwarded requests
 	DefaultRetentionPolicy string `toml:"default-retention-policy"`
 
+	// Token for authentication
+	Token string `toml:"token"`
+
 	// Outputs is a list of backed servers where writes will be forwarded
 	Outputs []HTTPOutputConfig `toml:"output"`
 }
@@ -52,6 +55,8 @@ type HTTPOutputConfig struct {
 	// Skip TLS verification in order to use self signed certificate.
 	// WARNING: It's insecure. Use it only for developing and don't use in production.
 	SkipTLSVerification bool `toml:"skip-tls-verification"`
+
+	Token string `toml:"token"`
 }
 
 type UDPConfig struct {
