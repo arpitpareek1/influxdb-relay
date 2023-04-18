@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -113,7 +116,18 @@ func (h *HTTP) Stop() error {
 }
 
 func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
+	if r.URL.Path == "/api/v2/write" {
+		h.serverWrite(w, r)
+		return
+	}
+
+	// reverse proxy query api
+	if r.URL.Path == "/api/v2/query" {
+		l := len(h.backends)
+		idx := rand.Intn(l)
+		h.backends[idx].reverseProxy.ServeHTTP(w, r)
+		return
+	}
 
 	if r.URL.Path == "/ping" && (r.Method == "GET" || r.Method == "HEAD") {
 		w.Header().Add("X-InfluxDB-Version", "relay")
@@ -121,10 +135,11 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path != "/api/v2/write" {
-		jsonError(w, http.StatusNotFound, "invalid write endpoint:"+r.URL.Path)
-		return
-	}
+	jsonError(w, http.StatusNotFound, "invalid write endpoint:"+r.URL.Path)
+}
+
+func (h *HTTP) serverWrite(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 
 	if r.Method != "POST" {
 		w.Header().Set("Allow", "POST")
@@ -364,7 +379,8 @@ func (b *simplePoster) tokenStr() string {
 
 type httpBackend struct {
 	poster
-	name string
+	reverseProxy httputil.ReverseProxy
+	name         string
 }
 
 func newHTTPBackend(cfg *HTTPOutputConfig) (*httpBackend, error) {
@@ -381,7 +397,17 @@ func newHTTPBackend(cfg *HTTPOutputConfig) (*httpBackend, error) {
 		timeout = t
 	}
 
-	var p poster = newSimplePoster(cfg.Location, timeout, cfg.SkipTLSVerification, cfg.Token)
+	rpurl, err := url.Parse(fmt.Sprintf("%s%s", cfg.Location, cfg.Query))
+	if err != nil {
+		log.Fatalf("Invalid location or query: %s%s", cfg.Location, cfg.Query)
+	}
+
+	rp := newSingleHostReverseProxy(rpurl, cfg.Token)
+
+	var p poster = newSimplePoster(
+		fmt.Sprintf("%s%s", cfg.Location, cfg.Write),
+		timeout, cfg.SkipTLSVerification, cfg.Token,
+	)
 
 	// If configured, create a retryBuffer per backend.
 	// This way we serialize retries against each backend.
@@ -404,8 +430,9 @@ func newHTTPBackend(cfg *HTTPOutputConfig) (*httpBackend, error) {
 	}
 
 	return &httpBackend{
-		poster: p,
-		name:   cfg.Name,
+		poster:       p,
+		reverseProxy: *rp,
+		name:         cfg.Name,
 	}, nil
 }
 
@@ -423,4 +450,24 @@ func getBuf() *bytes.Buffer {
 func putBuf(b *bytes.Buffer) {
 	b.Reset()
 	bufPool.Put(b)
+}
+
+func newSingleHostReverseProxy(target *url.URL, token string) *httputil.ReverseProxy {
+	director := func(req *http.Request) {
+		rewriteRequestURL(req, target)
+		req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
+	}
+	return &httputil.ReverseProxy{Director: director}
+}
+
+func rewriteRequestURL(req *http.Request, target *url.URL) {
+	targetQuery := target.RawQuery
+	req.URL.Scheme = target.Scheme
+	req.URL.Host = target.Host
+	req.URL.Path, req.URL.RawPath = target.Path, target.RawPath
+	if targetQuery == "" || req.URL.RawQuery == "" {
+		req.URL.RawQuery = targetQuery + req.URL.RawQuery
+	} else {
+		req.URL.RawQuery = targetQuery + "&" + req.URL.RawQuery
+	}
 }

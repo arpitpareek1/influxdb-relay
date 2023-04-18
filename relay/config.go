@@ -35,8 +35,14 @@ type HTTPOutputConfig struct {
 	// Name of the backend server
 	Name string `toml:"name"`
 
-	// Location should be set to the URL of the backend server's write endpoint
+	// Location should be set to the URL of the backend server's api endpoint
 	Location string `toml:"location"`
+
+	// Write should be set to the URL of the backend server's write api path
+	Write string `toml:"write"`
+
+	// Query should be set to the URL of the backend server's query api path'
+	Query string `toml:"query"`
 
 	// Timeout sets a per-backend timeout for write requests. (Default 10s)
 	// The format used is the same seen in time.ParseDuration

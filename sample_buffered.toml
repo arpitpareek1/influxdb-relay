@@ -5,6 +5,6 @@ name = "example-http"
 bind-addr = "127.0.0.1:9096"
 token = "test"
 output = [
-    { name="local1", location = "http://127.0.0.1:8086/api/v2/write", buffer-size-mb = 100, max-batch-kb = 50, max-delay-interval = "5s", token="e_RJbnYSAkFCg6PxpO08VtRCulD8WDFrQKxoXAkRTxD7bV6JwPYZ9NvL_uKese_uYLdg-Mf9vfiiQ4I2z19wuA==" },
-    { name="local2", location = "http://163.228.230.87:8086/api/v2/write", buffer-size-mb = 100, max-batch-kb = 50, max-delay-interval = "5s", token="T_1IlN7TzIPHFWJNefYCYPcA8iNTe2ES7JdC-SHusmq47a_-rHpzgQ5gDqjB-kPJ6KzLtps_rF0o-v6I2YSyrQ==" },
+    { name="local1", location = "http://127.0.0.1:8086", write="/api/v2/write", query="/api/v2/query", buffer-size-mb = 100, max-batch-kb = 50, max-delay-interval = "5s", token="e_RJbnYSAkFCg6PxpO08VtRCulD8WDFrQKxoXAkRTxD7bV6JwPYZ9NvL_uKese_uYLdg-Mf9vfiiQ4I2z19wuA==" },
+    { name="local2", location = "http://163.228.230.87:8086", write="/api/v2/write", query="/api/v2/query", buffer-size-mb = 100, max-batch-kb = 50, max-delay-interval = "5s", token="HVc5pNWg1YAjniSORo7BHa1CJxLZwBf_GJBDhauV6otMBxSLuaZXnj-irSmLMmhd8TrErOPQy6jzq9LmdhdJ1A==" },
 ]
