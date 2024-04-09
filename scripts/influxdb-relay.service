@@ -2,7 +2,7 @@
 
 [Unit]
 Description=InfluxDB-Relay is a service to replicate InfluxDB data for high availability
-Documentation=https://github.com/influxdata/influxdb-relay
+Documentation=https://github.com/arpitpareek1/influxdb-relay
 After=network.target
 
 [Service]

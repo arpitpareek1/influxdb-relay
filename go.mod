@@ -1,4 +1,4 @@
-module github.com/influxdata/influxdb-relay
+module github.com/arpitpareek1/influxdb-relay
 
 go 1.13
 
